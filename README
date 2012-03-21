@@ -1,0 +1,8 @@
+Shuffling Clock Multiplier
+version 1.0.4
+
+Major bug fixes
+-double trigger outputs
+-jitter at high freq
+
+Used a faster 32-bit by 8-bit division routine (assembly) for faster execution
