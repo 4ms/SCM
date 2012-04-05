@@ -100,11 +100,12 @@ code revision 1.0.4_NoFreeRun
 
 volatile uint32_t tmr[10];
 volatile uint32_t clockin_irq_timestamp=0;
+volatile char is_running=0;
 
 
 
 SIGNAL (SIG_OVERFLOW0){
-	tmr[0]++;
+	tmr[CLKIN]++;
 	tmr[1]++;
 	tmr[2]++;
 	tmr[3]++;
@@ -113,7 +114,7 @@ SIGNAL (SIG_OVERFLOW0){
 	tmr[6]++;
 	tmr[7]++;
 	tmr[8]++;
-	tmr[9]++;
+	tmr[INTERNAL]++;
 	TCNT0=0; // Re-init timer
 }
 
@@ -130,6 +131,9 @@ void reset_tmr(uint8_t i){
 	tmr[i]=0;
 	sei();
 }
+
+#define STARTTIMER TCCR0B=(1<<CS01)
+#define STOPTIMER TCCR0B=0
 
 void inittimer(void){
 	//Fast PWM , TOP at 0xFF, OC0 disconnected, Prescale @ FCK/8
@@ -158,6 +162,7 @@ ISR (INT0_vect){
 		clockin_irq_timestamp=tmr[CLKIN];
 		tmr[CLKIN]=0;
 		tmr[INTERNAL]=0;
+		//STARTTIMER;
 	}
 }
 
@@ -397,6 +402,7 @@ int main(void){
 			}
 		}
 
+/*
 		if (RESYNC){
 			if (resync_up==0){
 				resync_up=1;
@@ -420,13 +426,34 @@ int main(void){
 
 			}
 		} else resync_up=0;
-
+*/
 
 		if (CLOCK_IN)
 			ON_NOMUTE(CLOCK_LED_PORT,CLOCK_LED_pin);
-		else
+		else {
 			OFF(CLOCK_LED_PORT,CLOCK_LED_pin);
+			
+			now=gettmr(CLKIN);
+			if (0 && now>(period<<2)){	//missed a whole clock pulse and are about to miss another!
 
+				//STOPTIMER;
+				reset_tmr(CLKIN);
+				reset_tmr(1);
+				reset_tmr(2);
+				reset_tmr(3);
+				reset_tmr(4);
+				reset_tmr(5);
+				reset_tmr(6);
+				reset_tmr(7);
+				reset_tmr(8);
+				reset_tmr(INTERNAL);
+
+				is_running=0;
+
+				ALLOFF(OUT_PORT1,OUT_MASK1);
+				ALLOFF(OUT_PORT2,OUT_MASK2);
+			}
+		}
 
 
 		/* 
@@ -435,7 +462,8 @@ int main(void){
 		*/
 		now=gettmr(INTERNAL);
 		if (now>=period){
-			got_internal_clock=1;
+			//if (RESYNC) //resync enables free-running clocks
+			//	got_internal_clock=1;
 		}
 	
 
@@ -448,12 +476,13 @@ int main(void){
 			*/
 			cli();
 
-				if (!clockin_irq_timestamp){
-					if (tmr[INTERNAL]>period)
-						tmr[INTERNAL]=tmr[INTERNAL]-period;
-				} else {
+				if (clockin_irq_timestamp){
 					period=clockin_irq_timestamp;
 					clockin_irq_timestamp=0;
+					is_running=1;
+				} else {
+					if (tmr[INTERNAL]>period)
+						tmr[INTERNAL]=tmr[INTERNAL]-period;
 				}
 
 				tmr[1]=0;
@@ -481,7 +510,7 @@ int main(void){
 
 			update_pulse_params=2;
 
-		}
+		} 
 
 
 		if (update_pulse_params){
@@ -553,7 +582,7 @@ int main(void){
 */
 
 
-
+		if (is_running){
 		//Jack 1: x1, no skip, no shuffle
 		//use d0,per0 which defaults to x1
 		now=gettmr(1);
@@ -694,6 +723,7 @@ int main(void){
 			ON(OUT_PORT2,6);
 		}
 
+		}
 
 /* Turn jacks off whenever the pulsewidth has expired*/
 
