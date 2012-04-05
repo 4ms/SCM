@@ -1,6 +1,5 @@
 /*
-for Breakout v1.0.1 and later
-code revision 1.0.4
+code revision 1.0.4_NoFreeRun
 */
 /*
 	curadc PORT	Pin	LABEL	Cable#	Name
@@ -32,8 +31,10 @@ code revision 1.0.4
 
 
 /** SETTINGS **/
-//MIN_PW 10 is about 1.28ms
+//MIN_PW 10 is about 1.70ms
+//MIN_PW 70 is about 10ms
 #define MIN_PW 10
+
 #define MIN_ADC_DRIFT 1
 #define USER_INPUT_POLL_TIME 100
 
