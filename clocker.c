@@ -162,6 +162,7 @@ ISR (INT0_vect){
 		clockin_irq_timestamp=tmr[CLKIN];
 		tmr[CLKIN]=0;
 		tmr[INTERNAL]=0;
+		is_running=1;
 		//STARTTIMER;
 	}
 }
@@ -428,32 +429,6 @@ int main(void){
 		} else resync_up=0;
 */
 
-		if (CLOCK_IN)
-			ON_NOMUTE(CLOCK_LED_PORT,CLOCK_LED_pin);
-		else {
-			OFF(CLOCK_LED_PORT,CLOCK_LED_pin);
-			
-			now=gettmr(CLKIN);
-			if (0 && now>(period<<2)){	//missed a whole clock pulse and are about to miss another!
-
-				//STOPTIMER;
-				reset_tmr(CLKIN);
-				reset_tmr(1);
-				reset_tmr(2);
-				reset_tmr(3);
-				reset_tmr(4);
-				reset_tmr(5);
-				reset_tmr(6);
-				reset_tmr(7);
-				reset_tmr(8);
-				reset_tmr(INTERNAL);
-
-				is_running=0;
-
-				ALLOFF(OUT_PORT1,OUT_MASK1);
-				ALLOFF(OUT_PORT2,OUT_MASK2);
-			}
-		}
 
 
 		/* 
@@ -511,6 +486,34 @@ int main(void){
 			update_pulse_params=2;
 
 		} 
+
+		if (CLOCK_IN) 
+			ON_NOMUTE(CLOCK_LED_PORT,CLOCK_LED_pin);
+		 else {
+			OFF(CLOCK_LED_PORT,CLOCK_LED_pin);
+			
+			//Stop the outputs (is_running=0) if we haven't received an input clock when we expect one.
+			now=gettmr(CLKIN);
+			if (now>((period<<1)+10)){	
+
+				//STOPTIMER;
+				reset_tmr(CLKIN);
+				reset_tmr(1);
+				reset_tmr(2);
+				reset_tmr(3);
+				reset_tmr(4);
+				reset_tmr(5);
+				reset_tmr(6);
+				reset_tmr(7);
+				reset_tmr(8);
+				reset_tmr(INTERNAL);
+
+				is_running=0;
+
+				ALLOFF(OUT_PORT1,OUT_MASK1);
+				ALLOFF(OUT_PORT2,OUT_MASK2);
+			}
+		}
 
 
 		if (update_pulse_params){
