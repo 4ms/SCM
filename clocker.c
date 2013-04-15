@@ -1,6 +1,6 @@
 /*
 for Breakout v1.0.1 and later
-code revision 1.0.4
+code revision 1.0.5: fixed the skip array in cv_skip.inc file to include 128 values.
 */
 /*
 	curadc PORT	Pin	LABEL	Cable#	Name
