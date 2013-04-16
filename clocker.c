@@ -1,5 +1,8 @@
 /*
-code revision 1.0.4_NoFreeRun
+Code revision 1.0.5_nofreerun
+
+Does not free-run unless RESYNC is high
+
 */
 /*
 	curadc PORT	Pin	LABEL	Cable#	Name
@@ -31,10 +34,8 @@ code revision 1.0.4_NoFreeRun
 
 
 /** SETTINGS **/
-//MIN_PW 10 is about 1.70ms
-//MIN_PW 70 is about 10ms
+//MIN_PW 10 is about 1.28ms
 #define MIN_PW 10
-
 #define MIN_ADC_DRIFT 1
 #define USER_INPUT_POLL_TIME 100
 
@@ -100,12 +101,11 @@ code revision 1.0.4_NoFreeRun
 
 volatile uint32_t tmr[10];
 volatile uint32_t clockin_irq_timestamp=0;
-volatile char is_running=0;
 
 
 
 SIGNAL (SIG_OVERFLOW0){
-	tmr[CLKIN]++;
+	tmr[0]++;
 	tmr[1]++;
 	tmr[2]++;
 	tmr[3]++;
@@ -114,7 +114,7 @@ SIGNAL (SIG_OVERFLOW0){
 	tmr[6]++;
 	tmr[7]++;
 	tmr[8]++;
-	tmr[INTERNAL]++;
+	tmr[9]++;
 	TCNT0=0; // Re-init timer
 }
 
@@ -131,9 +131,6 @@ void reset_tmr(uint8_t i){
 	tmr[i]=0;
 	sei();
 }
-
-#define STARTTIMER TCCR0B=(1<<CS01)
-#define STOPTIMER TCCR0B=0
 
 void inittimer(void){
 	//Fast PWM , TOP at 0xFF, OC0 disconnected, Prescale @ FCK/8
@@ -162,8 +159,6 @@ ISR (INT0_vect){
 		clockin_irq_timestamp=tmr[CLKIN];
 		tmr[CLKIN]=0;
 		tmr[INTERNAL]=0;
-		is_running=1;
-		//STARTTIMER;
 	}
 }
 
@@ -256,7 +251,8 @@ int main(void){
 	uint8_t p2=0,p3=0,p4=0,p5=0,p6=0; //current pulse # in the sequence for each jack
 
 	uint16_t temp_u16;
-	char got_internal_clock=0;
+
+	char is_running=0;
 
 	uint32_t now=0;
 
@@ -293,7 +289,7 @@ int main(void){
 	pw_adc=127;
 	rotate_adc=0;	
 	slippage_adc=127;
-
+ 
 	pcint_init();
 
 	while(1){
@@ -403,7 +399,6 @@ int main(void){
 			}
 		}
 
-/*
 		if (RESYNC){
 			if (resync_up==0){
 				resync_up=1;
@@ -427,22 +422,25 @@ int main(void){
 
 			}
 		} else resync_up=0;
-*/
+
+
+		if (CLOCK_IN)
+			ON_NOMUTE(CLOCK_LED_PORT,CLOCK_LED_pin);
+		else
+			OFF(CLOCK_LED_PORT,CLOCK_LED_pin);
 
 
 
 		/* 
-			Check to see if the clock input timer tmr[INTERNAL] has surpassed the period
-			If so, 
+			
 		*/
-		now=gettmr(INTERNAL);
-		if (now>=period){
-			//if (RESYNC) //resync enables free-running clocks
-			//	got_internal_clock=1;
+		now=gettmr(CLKIN);
+		if (now>=(period<<1)){
+			is_running=0;
 		}
 	
 
-		if (got_internal_clock || (clockin_irq_timestamp && CLOCK_IN)){
+		if ((clockin_irq_timestamp && CLOCK_IN)){
 
 			/*	Clock IN received:
 				Turn all outputs on
@@ -451,15 +449,9 @@ int main(void){
 			*/
 			cli();
 
-				if (clockin_irq_timestamp){
-					period=clockin_irq_timestamp;
-					clockin_irq_timestamp=0;
-					is_running=1;
-				} else {
-					if (tmr[INTERNAL]>period)
-						tmr[INTERNAL]=tmr[INTERNAL]-period;
-				}
-
+				period=clockin_irq_timestamp;
+				clockin_irq_timestamp=0;
+	
 				tmr[1]=0;
 				tmr[2]=0;
 				tmr[3]=0;
@@ -469,7 +461,7 @@ int main(void){
 				tmr[7]=0;
 				tmr[8]=0;
 			sei();
-
+	
 			ON(OUT_PORT1,0);
 			ON(OUT_PORT1,1);
 			ON(OUT_PORT1,2);
@@ -479,40 +471,12 @@ int main(void){
 			ON(OUT_PORT2,7);
 			ON(OUT_PORT2,6);
 
-			got_internal_clock=0;
+			is_running=1;
 			p2=0;p3=0;p4=0;p5=0;p6=0;
 			s2=0;s3=0;s4=0;s5=0;s6=0;
 
 			update_pulse_params=2;
 
-		} 
-
-		if (CLOCK_IN) 
-			ON_NOMUTE(CLOCK_LED_PORT,CLOCK_LED_pin);
-		 else {
-			OFF(CLOCK_LED_PORT,CLOCK_LED_pin);
-			
-			//Stop the outputs (is_running=0) if we haven't received an input clock when we expect one.
-			now=gettmr(CLKIN);
-			if (now>((period<<1)+10)){	
-
-				//STOPTIMER;
-				reset_tmr(CLKIN);
-				reset_tmr(1);
-				reset_tmr(2);
-				reset_tmr(3);
-				reset_tmr(4);
-				reset_tmr(5);
-				reset_tmr(6);
-				reset_tmr(7);
-				reset_tmr(8);
-				reset_tmr(INTERNAL);
-
-				is_running=0;
-
-				ALLOFF(OUT_PORT1,OUT_MASK1);
-				ALLOFF(OUT_PORT2,OUT_MASK2);
-			}
 		}
 
 
@@ -585,7 +549,8 @@ int main(void){
 */
 
 
-		if (is_running){
+		if (is_running || RESYNC){
+
 		//Jack 1: x1, no skip, no shuffle
 		//use d0,per0 which defaults to x1
 		now=gettmr(1);
@@ -738,6 +703,7 @@ int main(void){
 		if (gettmr(6)>=pw5) {OFF(OUT_PORT1,5);}
 		if (gettmr(7)>=pw7) {OFF(OUT_PORT2,7);}
 		if (gettmr(8)>=pw7) {OFF(OUT_PORT2,6);}
+
 
 	}	//endless loop
 
