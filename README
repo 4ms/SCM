@@ -1,4 +1,13 @@
 Shuffling Clock Multiplier
+version 1.0.6
+Changed the way resync happens: no longer forces all jacks high immediately
+Debounces resync jack
+
+
+version 1.0.5
+Fixed random triggers when Skip CV was a max, by making cv_skip array have 128 values.
+
+
 version 1.0.4
 
 Major bug fixes

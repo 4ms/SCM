@@ -1,6 +1,7 @@
 /*
 for Breakout v1.0.1 and later
-code revision 1.0.4
+code revision 1.0.6: changed the way resync happens: no longer forces all jacks high immediately, and debounces
+code revision 1.0.5: fixed the skip array in cv_skip.inc file to include 128 values.
 */
 /*
 	curadc PORT	Pin	LABEL	Cable#	Name
@@ -37,6 +38,7 @@ code revision 1.0.4
 #define MIN_ADC_DRIFT 1
 #define USER_INPUT_POLL_TIME 100
 
+#define NO_FREERUN 0
 
 /**MNEMONICS**/
 #define CLKIN 0
@@ -102,7 +104,8 @@ volatile uint32_t clockin_irq_timestamp=0;
 
 
 
-SIGNAL (SIG_OVERFLOW0){
+//SIGNAL (SIG_OVERFLOW0){
+SIGNAL (TIMER0_OVF_vect){
 	tmr[0]++;
 	tmr[1]++;
 	tmr[2]++;
@@ -253,7 +256,7 @@ int main(void){
 
 	uint32_t now=0;
 
-	char resync_up=0;
+	uint16_t t16, resync_state=0;
 
 	int32_t slip2=0,slip3=0,slip4=0,slip5=0,slip6=0;
 
@@ -396,10 +399,15 @@ int main(void){
 			}
 		}
 
+/*
 		if (RESYNC){
 			if (resync_up==0){
 				resync_up=1;
-				
+*/				
+		if (RESYNC) t16=0xe000; else t16=0xe001; //1110 0000 0000 000{0=jack high | 1=jack low}
+		resync_state = (resync_state<<1) | t16;
+		if ((resync_state) == 0xFF00) { //low 5 times then high 8 times
+/**/
 				p2=0;p3=0;p4=0;p5=0;p6=0;
 				s2=0;s3=0;s4=0;s5=0;s6=0;
 				slip2=slipamt2;
@@ -408,17 +416,20 @@ int main(void){
 				slip5=slipamt5;
 				slip6=slipamt7;
 
-				ON(OUT_PORT1,0);
-				ON(OUT_PORT1,1);
-				ON(OUT_PORT1,2);
-				ON(OUT_PORT1,3);
-				ON(OUT_PORT1,4);
-				ON(OUT_PORT1,5);
-				ON(OUT_PORT2,7);
-				ON(OUT_PORT2,6);
-
+				//ON(OUT_PORT1,0);
+				//ON(OUT_PORT1,1);
+				//ON(OUT_PORT1,2);
+				//ON(OUT_PORT1,3);
+				//ON(OUT_PORT1,4);
+				//ON(OUT_PORT1,5);
+				//ON(OUT_PORT2,7);
+				//ON(OUT_PORT2,6);
+		}
+/**/
+/*
 			}
 		} else resync_up=0;
+*/
 
 
 		if (CLOCK_IN)
@@ -432,11 +443,14 @@ int main(void){
 			Check to see if the clock input timer tmr[INTERNAL] has surpassed the period
 			If so, 
 		*/
-		now=gettmr(INTERNAL);
-		if (now>=period){
-			got_internal_clock=1;
-		}
-	
+	//	if (NO_FREERUN){
+	//		got_internal_clock=0;
+	//	} else {
+			now=gettmr(INTERNAL);
+			if (now>=period){
+				got_internal_clock=1;
+			}
+	//	}
 
 		if (got_internal_clock || (clockin_irq_timestamp && CLOCK_IN)){
 
